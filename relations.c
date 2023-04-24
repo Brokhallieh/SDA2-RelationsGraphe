@@ -140,6 +140,17 @@ void detruire(listeg lst) {
 	}
 }
 
+bool contiens(listeg lst, void *x) {
+	listeg parcours = lst;
+	for (int i=0; i<longueur(lst); i++) {
+		if (parcours->val == x) {
+			return true;
+		}
+		parcours = parcours->suiv;
+	}
+	return false;
+}
+
 ////////////////////////////////////////
 // Exercice 3: Construction du graphe
 
@@ -299,28 +310,65 @@ void adjRelation(Relations g, char *nom1, char *nom2, rtype id) {
 listeg en_relation(Relations g, char *x) {
 	listeg parcours = g->l;
 	for (int i=0; i<longueur(g->l); i++) {
-		listeg recherche = rech(parcours->val, )
-		if (rech(parcours->val, nom1, compSommet)) {
-			return parcours->val->larcs;
+		listeg recherche = rech(parcours->val, x, compSommet);
+		if (!estvide(recherche)) {
+			detruire(recherche);
+			return ((Sommet)parcours->val)->larcs;
 		}
+		detruire(recherche);
 		parcours = parcours->suiv;
 	}
 	return NULL;
 }
 
-listeg chemin2(Relations g, char *x, char *y) {
+bool chemin(Relations g, char *x, char *y) {
 	listeg parcours = g->l;
 	for (int i=0; i<longueur(g->l); i++) {
-		if (!estvide(parcours->val, nom1, compSommet)) {
-			return parcours->val->larcs;
+		listeg toutes_relations_x = en_relation(g, x);
+		listeg parcours_relations = toutes_relations_x;
+		for (int i=0; i<longueur(toutes_relations_x); i++) {
+			if (strcmp(((Sommet)parcours_relations->val)->x->nom, y) == 0) {
+				detruire(toutes_relations_x);
+				return true;
+			}
+			parcours_relations = parcours_relations->suiv;
 		}
+		detruire(toutes_relations_x);
 		parcours = parcours->suiv;
 	}
-	return NULL;
+	return false;
 }
+
+listeg chemin2(Relations g, char *x, char *y) {
+	listeg retour = listegnouv();
+	listeg x_relations = en_relation(g, x);
+	listeg y_relations = en_relation(g, y);
+	listeg parcours_x = x_relations;
+	for (int i=0; i<longueur(x_relations); i++) {
+		listeg parcours_y = y_relations;
+		for (int j=0; j<longueur(y_relations); y++) {
+			if (strcmp(((Arc)parcours_x->val)->x->nom, ((Arc)parcours_y->val)->x->nom) == 0) {
+				retour = adjtete(retour, ((Arc)parcours_x->val)->x);
+			}
+			parcours_y = parcours_y->suiv;
+		}
+		parcours_x = parcours_x->suiv;
+	}
+	detruire(x_relations);
+	detruire(y_relations);
+	return retour;
+}
+
 // 4.2 verifier un lien de parente
 // PRE CONDITION: strcmp(x,y)!=0
 bool ont_lien_parente(Relations g, char *x, char *y) {
+	listeg x_relation = en_relation(g, x);
+	listeg parcours_x = x_relation;
+	for (int i=0; i<longueur(x_relation); i++) {
+		if ((strcmp(((Arc)parcours_x->val)->x->nom, y) == 0) && (((Arc)parcours_x->val)->t) <= 6) {
+			return true;
+		}
+	}
 	return false;
 }
 
