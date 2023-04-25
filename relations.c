@@ -5,6 +5,9 @@ typedef int bool;
 #define false 0
 #define true -1
 
+#define MALLOC(type)        ((type*)malloc(sizeof(type)))
+#define MALLOCN(type, n)    ((type*)malloc( (n) * sizeof(type)))
+
 #include "stdlib.h"
 #include "memory.h"
 #include "stdio.h"
@@ -58,7 +61,7 @@ bool est_lien_connaissance(rtype id) {
     return (id >= 7 && id <= 9);
 }
 
-char* toStringRelation(rtype id) {
+char* toStringRtype(rtype id) {
     for (int i = 0; i < TABLE_SIZE; i++) {
         if (table[i].key == id) {
             return table[i].value;
@@ -80,25 +83,28 @@ listeg listegnouv() {
 }
 
 listeg adjtete(listeg lst, void *x) {
-	listeg ajoute = malloc(sizeof(struct s_node));
+	listeg ajoute = MALLOC(struct s_node);
 	ajoute->val = x;
 	ajoute->suiv = lst;
 	return ajoute;
 }
 
-listeg adjqueue(listeg lst, void *x) {
-	listeg parcours = lst;
-	while (parcours != NULL) {
-		parcours = parcours->suiv;
-	}
-	parcours = malloc(sizeof(struct s_node));
-	parcours->val = x;
-	parcours->suiv = NULL;
-	return lst;
-}
-
 bool estvide(listeg lst) {
 	return lst == NULL;
+}
+
+listeg adjqueue(listeg lst, void *x) {
+    if (estvide(lst)) {
+        lst = adjtete(lst, x);
+    }
+	listeg parcours = lst;
+    while (parcours->suiv != NULL) {
+        parcours = parcours->suiv;
+    }
+	parcours->suiv = MALLOC(struct s_node);
+	parcours->suiv->val = x;
+	parcours->suiv->suiv = NULL;
+	return lst;
 }
 
 listeg suptete(listeg lst) {
@@ -112,16 +118,20 @@ listeg suptete(listeg lst) {
 
 listeg rech(listeg lst, void *x, int(*comp)(void *, void *)) {
 	listeg retour = listegnouv();
+    listeg parcours = lst;
 	while (!estvide(lst)) {
 		if (comp(x, lst->val) == 0) {
 			adjtete(retour, lst->val);
 		}
-		lst = lst->suiv;
+		parcours = parcours->suiv;
 	}
 	return retour;
 }
 
 void *tete(listeg lst) {
+    if (estvide(lst)) {
+        return NULL;
+    }
 	return lst->val;
 }
 
@@ -178,39 +188,40 @@ typedef struct s_relations {
 
 //3.2 les constructeurs
 Entite creerEntite(char *s, etype e) {
-	Entite retour = malloc(sizeof(struct s_entite));
+	Entite retour = MALLOC(struct s_entite);
 	strcpy(retour->nom, s);
 	retour->ident = e;
 	return retour;
 }
 
 Sommet nouvSommet(Entite e) {
-	Sommet retour = malloc(sizeof(struct s_sommet));
+	Sommet retour = MALLOC(struct s_sommet);
 	retour->larcs = NULL;
 	retour->x = e;
 	return retour;
 }
 
 Arc nouvArc(Entite e, rtype type) {
-	Arc retour = malloc(sizeof(struct s_arc));
+	Arc retour = MALLOC(struct s_arc);
 	retour->t = type;
 	retour->x = e;
 	return retour;
 }
 
 void relationInit(Relations *g) {
-	*g = malloc(sizeof(struct s_relations));
+	*g = MALLOC(struct s_relations);
 	(*g)->l = listegnouv();
 }
 
 void relationFree(Relations *g) {
 	listeg parcours_sommets = (*g)->l;
 	for (int i=0; i<longueur(parcours_sommets); i++) {
-		Sommet s = parcours_sommets->val;
+		Sommet s = (Sommet)parcours_sommets->val;
 		free(s->x);
 		listeg parcours_arcs = s->larcs;
 		for (int j=0; j<longueur(parcours_arcs); j++) {
-			Arc a = parcours_arcs->val;
+			Arc a = (Arc)parcours_arcs->val;
+            free(a->x->nom);
 			free(a->x);
 			free(a);
 			parcours_arcs = parcours_arcs->suiv;
@@ -251,12 +262,16 @@ int compArcRtype(void* arc, void* type) {
 //3.4 ajout d'entites et de relations
 
 void adjEntite(Relations g, char *nom, etype t) {
-	listeg recherche = rech(g->l, nom, compSommet);
-	if (!estvide(recherche)) {
-		detruire(recherche);
-		return;
-	}
-	detruire(recherche);
+    if (g == NULL) {return;}
+    listeg parcours = g->l;
+    while (!estvide(parcours)) {
+        listeg recherche = rech(g->l, nom, compSommet);
+        if (!estvide(recherche)) {
+            detruire(recherche);
+            return;
+        }
+        detruire(recherche);
+    }
 	Sommet s = nouvSommet(creerEntite(nom, t));
 	adjqueue(g->l, s);
 }
@@ -265,7 +280,8 @@ void adjEntite(Relations g, char *nom, etype t) {
 //                p.ex si x est de type OBJET, id ne peut pas etre une relation de parente
 // PRE CONDITION: strcmp(nom1,nom2)!=0
 void adjRelation(Relations g, char *nom1, char *nom2, rtype id) {
-	listeg l_nom1 = rech(g->l, nom1, compSommet);
+	if (g == NULL) {return;}
+    listeg l_nom1 = rech(g->l, nom1, compSommet);
 	listeg l_nom2 = rech(g->l, nom2, compSommet);
 	if (estvide(l_nom1) || estvide(l_nom2)) {
 		detruire(l_nom1);
@@ -276,31 +292,27 @@ void adjRelation(Relations g, char *nom1, char *nom2, rtype id) {
 	Sommet s_nom2 = l_nom2->val;
 	etype type_nom1 = s_nom1->x->ident;
 	etype type_nom2 = s_nom2->x->ident;
-	listeg parcours = g->l;
-	for (int i=0; i<longueur(g->l); i++) {
-		Sommet s_act = parcours->val;
-		if (strcmp(nom1, s_act->x->nom)) {
-			listeg l_arc = rech(s_act->larcs, nom1, compArcRtype);
-			if (l_arc == NULL)
-				adjqueue(s_act->larcs, nouvArc(creerEntite(nom2, type_nom2), id));
-			else {
-				Arc a = (Arc) l_arc->val;
-				a->t = id;
-			}
-		}
-		else if (strcmp(nom2, s_act->x->nom)) {
-			listeg l_arc = rech(s_act->larcs, nom2, compArcRtype);
-			if (l_arc == NULL)
-				adjqueue(s_act->larcs, nouvArc(creerEntite(nom1, type_nom1), id));
-			else {
-				Arc a = (Arc) l_arc->val;
-				a->t = id;
-			}
-		}
-		parcours = parcours->suiv;
-	}
-	detruire(l_nom1);
+
+    detruire(l_nom1);
 	detruire(l_nom2);
+
+    listeg l_arc = rech(s_nom1->larcs, nom1, compArcRtype);
+    if (l_arc == NULL)
+        adjqueue(s_nom1->larcs, nouvArc(creerEntite(nom2, type_nom2), id));
+    else {
+        Arc a = (Arc) l_arc->val;
+        a->t = id;
+    }
+    detruire(l_arc);
+
+    l_arc = rech(s_nom2->larcs, nom2, compArcRtype);
+    if (l_arc == NULL)
+        adjqueue(s_nom2->larcs, nouvArc(creerEntite(nom1, type_nom1), id));
+    else {
+        Arc a = (Arc) l_arc->val;
+        a->t = id;
+    }
+    detruire(l_arc);
 }
 
 ////////////////////////////////////////
@@ -310,18 +322,15 @@ void adjRelation(Relations g, char *nom1, char *nom2, rtype id) {
 listeg en_relation(Relations g, char *x) {
 	listeg parcours = g->l;
 	for (int i=0; i<longueur(g->l); i++) {
-		listeg recherche = rech(parcours->val, x, compSommet);
-		if (!estvide(recherche)) {
-			detruire(recherche);
-			return ((Sommet)parcours->val)->larcs;
-		}
-		detruire(recherche);
+		if (compSommet((Sommet)parcours->val, x)) {
+            return ((Sommet)parcours->val)->larcs;
+        }
 		parcours = parcours->suiv;
 	}
 	return NULL;
 }
 
-bool chemin(Relations g, char *x, char *y) {
+bool relation_directe(Relations g, char *x, char *y) {
 	listeg parcours = g->l;
 	for (int i=0; i<longueur(g->l); i++) {
 		listeg toutes_relations_x = en_relation(g, x);
@@ -345,10 +354,12 @@ listeg chemin2(Relations g, char *x, char *y) {
 	listeg y_relations = en_relation(g, y);
 	listeg parcours_x = x_relations;
 	for (int i=0; i<longueur(x_relations); i++) {
+        Arc relation_x = (Arc)parcours_x->val;
 		listeg parcours_y = y_relations;
 		for (int j=0; j<longueur(y_relations); y++) {
-			if (strcmp(((Arc)parcours_x->val)->x->nom, ((Arc)parcours_y->val)->x->nom) == 0) {
-				retour = adjtete(retour, ((Arc)parcours_x->val)->x);
+            Arc relation_y = (Arc)parcours_y->val;
+			if (strcmp(relation_x->x->nom, relation_y->x->nom) == 0) {
+				retour = adjtete(retour, relation_x->x);
 			}
 			parcours_y = parcours_y->suiv;
 		}
@@ -365,7 +376,8 @@ bool ont_lien_parente(Relations g, char *x, char *y) {
 	listeg x_relation = en_relation(g, x);
 	listeg parcours_x = x_relation;
 	for (int i=0; i<longueur(x_relation); i++) {
-		if ((strcmp(((Arc)parcours_x->val)->x->nom, y) == 0) && (((Arc)parcours_x->val)->t) <= 6) {
+        Arc relation_x = (Arc)parcours_x->val;
+		if ((strcmp(relation_x->x->nom, y) == 0) && (relation_x->t) <= 6) {
 			return true;
 		}
 	}
@@ -392,15 +404,59 @@ bool se_connaissent_peutetre(Relations g, char *x, char *y) {
 ////////////////////////////////////////
 // Exercice 5: Affichages
 
-void affichelg(listeg l, void(*aff)(void *)) {
+char* toStringEtype(etype e) {
+    switch (e) {
+    case PERSONNE:
+        return "personne";
+    case OBJET:
+        return "objet";
+    case ADRESSE:
+        return "adresse";
+    case VILLE:
+        return "ville";
+    }
+    return "type d'entité non trouvé";
+}
 
+void affichelg(listeg l, void(*aff)(void *)) {
+    listeg parcours = l;
+    for (int i=0; i<longueur(l); i++) {
+        aff(parcours->val);
+        parcours = parcours->suiv;
+    }
 }
 
 void afficheEntite(void *x) {
-
+    Entite e = (Entite) x;
+    printf("%s : %s\n", e->nom, toStringEtype(e->ident));
 }
-void afficheArc(void *x) {
 
+void afficheArc(void *x) {
+    Arc a = (Arc) x;
+    char* relation = toStringRtype(a->t);
+    printf("--%s->", relation);
+    free(relation);
+    afficheEntite(a->x);
+}
+
+void affiche_toutes_relations(Relations g) {
+    if (g == NULL) {return;}
+    printf("%d\n", longueur(g->l));
+    Sommet s = (Sommet) g->l->val;
+    printf("%s", s->x->nom);
+    listeg parcours_entites = g->l;
+    for (int i=0; i<longueur(g->l); i++) {
+        Sommet s = (Sommet)parcours_entites->val;
+        printf("%s qui est un(e) %s a les relations:\n", s->x->nom, toStringEtype(s->x->ident));
+        listeg parcours_relations = s->larcs;
+        for (int j=0; j<longueur(s->larcs); j++) {
+            Arc a = (Arc) parcours_relations->val;
+            afficheArc(a);
+            parcours_relations = parcours_relations->suiv;
+        }
+        printf("\n");
+        parcours_entites = parcours_entites->suiv;
+    }
 }
 
 ////////////////////////////////////////
@@ -413,7 +469,6 @@ void affiche_degre_relations(Relations r, char *x) {
 int main()
 {
     
-
     
 
 
@@ -439,9 +494,12 @@ int main()
 	adjRelation(r, tabe[7], tabe[8], DECOUVERT);
 	adjRelation(r, tabe[8], tabe[9], SITUE);
 
+    affiche_toutes_relations(r);
+    
+    /*
 	// explorer les relations
 	printf("%s est en relation avec:\n", tabe[0]);
-	affichelg(en_relation(r, tabe[0]),afficheArc);
+	affichelg(en_relation(r, tabe[0]), afficheArc);
 	printf("\n");
 
 	for (i = 0; i < 7; i++) for (j = i + 1; j < 10; j++) {
@@ -468,7 +526,7 @@ int main()
 		printf("\n");
 	}
 
-	affiche_degre_relations(r, tabe[3]);
+	affiche_degre_relations(r, tabe[3]);*/
 
 	relationFree(&r);
 
