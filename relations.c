@@ -95,7 +95,7 @@ bool estvide(listeg lst) {
 
 listeg adjqueue(listeg lst, void *x) {
     if (estvide(lst)) {
-        lst = adjtete(lst, x);
+        return adjtete(lst, x);
     }
 	listeg parcours = lst;
     while (parcours->suiv != NULL) {
@@ -116,12 +116,21 @@ listeg suptete(listeg lst) {
 	return deuxieme;
 }
 
+int longueur(listeg lst) {
+	int longueur=0;
+	while (lst != NULL) {
+		longueur++;
+		lst = lst->suiv;
+	}
+	return longueur;
+}
+
 listeg rech(listeg lst, void *x, int(*comp)(void *, void *)) {
 	listeg retour = listegnouv();
     listeg parcours = lst;
-	while (!estvide(lst)) {
-		if (comp(x, lst->val) == 0) {
-			adjtete(retour, lst->val);
+	for (int i=0; i<longueur(lst); i++) {
+		if (comp(parcours->val, x) == 0) {
+			adjtete(retour, parcours->val);
 		}
 		parcours = parcours->suiv;
 	}
@@ -135,19 +144,15 @@ void *tete(listeg lst) {
 	return lst->val;
 }
 
-int longueur(listeg lst) {
-	int longueur=0;
-	while (lst != NULL) {
-		longueur++;
-		lst = lst->suiv;
-	}
-	return longueur;
-}
-
 void detruire(listeg lst) {
 	while (!estvide(lst)) {
 		lst = suptete(lst);
 	}
+}
+
+listeg det_null(listeg lst) {
+	detruire(lst);
+	return NULL;
 }
 
 bool contiens(listeg lst, void *x) {
@@ -226,23 +231,24 @@ void relationFree(Relations *g) {
 			free(a);
 			parcours_arcs = parcours_arcs->suiv;
 		}
-		detruire(s->larcs);
+		s->larcs = det_null(s->larcs);
 		free(s);
 		parcours_sommets = parcours_sommets->suiv;
 	}
-	detruire((*g)->l);
+	(*g)->l = det_null((*g)->l);
 }
 
 //3.3 les comparaisons
 int compEntite(void *e, void *string) {
 	Entite entite = (Entite) e;
 	char* cmp = (char*) string;
-	return strcmp(entite->nom, cmp);
+	int retour = strcmp(entite->nom, cmp);
+	return retour;
 }
 
 int compSommet(void *s, void *string) {
-	Sommet sommet = (Sommet) s;
-	return compEntite(sommet->x, string);
+	Sommet som = (Sommet) s;
+	return compEntite(som->x, string);
 }
 
 int compArc(void *a, void *string) {
@@ -263,17 +269,14 @@ int compArcRtype(void* arc, void* type) {
 
 void adjEntite(Relations g, char *nom, etype t) {
     if (g == NULL) {return;}
-    listeg parcours = g->l;
-    while (!estvide(parcours)) {
-        listeg recherche = rech(g->l, nom, compSommet);
-        if (!estvide(recherche)) {
-            detruire(recherche);
-            return;
-        }
-        detruire(recherche);
-    }
+    listeg recherche = rech(g->l, nom, compSommet);
+	if (!estvide(recherche)) {
+		recherche = det_null(recherche);
+		return;
+	}
+	recherche = det_null(recherche);
 	Sommet s = nouvSommet(creerEntite(nom, t));
-	adjqueue(g->l, s);
+	g->l = adjqueue(g->l, s);
 }
 
 // PRE CONDITION: id doit être cohérent avec les types des sommets correspondants à x et y
@@ -284,35 +287,36 @@ void adjRelation(Relations g, char *nom1, char *nom2, rtype id) {
     listeg l_nom1 = rech(g->l, nom1, compSommet);
 	listeg l_nom2 = rech(g->l, nom2, compSommet);
 	if (estvide(l_nom1) || estvide(l_nom2)) {
-		detruire(l_nom1);
-		detruire(l_nom2);
+		l_nom1 = det_null(l_nom1);
+		l_nom2 = det_null(l_nom2);
 		return;
 	}
-	Sommet s_nom1 = l_nom1->val;
-	Sommet s_nom2 = l_nom2->val;
+	Sommet s_nom1 = (Sommet) l_nom1->val;
+	Sommet s_nom2 = (Sommet) l_nom2->val;
+
+	l_nom1 = det_null(l_nom1);
+	l_nom2 = det_null(l_nom2);
+
 	etype type_nom1 = s_nom1->x->ident;
 	etype type_nom2 = s_nom2->x->ident;
 
-    detruire(l_nom1);
-	detruire(l_nom2);
-
     listeg l_arc = rech(s_nom1->larcs, nom1, compArcRtype);
     if (l_arc == NULL)
-        adjqueue(s_nom1->larcs, nouvArc(creerEntite(nom2, type_nom2), id));
+        s_nom1->larcs = adjqueue(s_nom1->larcs, nouvArc(creerEntite(nom2, type_nom2), id));
     else {
         Arc a = (Arc) l_arc->val;
         a->t = id;
+		l_arc = det_null(l_arc);
     }
-    detruire(l_arc);
 
     l_arc = rech(s_nom2->larcs, nom2, compArcRtype);
     if (l_arc == NULL)
-        adjqueue(s_nom2->larcs, nouvArc(creerEntite(nom1, type_nom1), id));
+        s_nom2->larcs = adjqueue(s_nom2->larcs, nouvArc(creerEntite(nom1, type_nom1), id));
     else {
         Arc a = (Arc) l_arc->val;
         a->t = id;
+		l_arc = det_null(l_arc);
     }
-    detruire(l_arc);
 }
 
 ////////////////////////////////////////
@@ -337,12 +341,12 @@ bool relation_directe(Relations g, char *x, char *y) {
 		listeg parcours_relations = toutes_relations_x;
 		for (int i=0; i<longueur(toutes_relations_x); i++) {
 			if (strcmp(((Sommet)parcours_relations->val)->x->nom, y) == 0) {
-				detruire(toutes_relations_x);
+				toutes_relations_x = det_null(toutes_relations_x);
 				return true;
 			}
 			parcours_relations = parcours_relations->suiv;
 		}
-		detruire(toutes_relations_x);
+		toutes_relations_x = det_null(toutes_relations_x);
 		parcours = parcours->suiv;
 	}
 	return false;
@@ -365,8 +369,8 @@ listeg chemin2(Relations g, char *x, char *y) {
 		}
 		parcours_x = parcours_x->suiv;
 	}
-	detruire(x_relations);
-	detruire(y_relations);
+	x_relations = det_null(x_relations);
+	y_relations = det_null(y_relations);
 	return retour;
 }
 
@@ -422,8 +426,12 @@ void affichelg(listeg l, void(*aff)(void *)) {
     listeg parcours = l;
     for (int i=0; i<longueur(l); i++) {
         aff(parcours->val);
+		if (parcours->suiv != NULL) {
+			printf(", ");
+		}
         parcours = parcours->suiv;
     }
+	printf("\n");
 }
 
 void afficheEntite(void *x) {
@@ -441,15 +449,14 @@ void afficheArc(void *x) {
 
 void affiche_toutes_relations(Relations g) {
     if (g == NULL) {return;}
-    printf("%d\n", longueur(g->l));
-    Sommet s = (Sommet) g->l->val;
-    printf("%s", s->x->nom);
+    printf("%d\n", longueur(g->l)); //debug
     listeg parcours_entites = g->l;
     for (int i=0; i<longueur(g->l); i++) {
         Sommet s = (Sommet)parcours_entites->val;
-        printf("%s qui est un(e) %s a les relations:\n", s->x->nom, toStringEtype(s->x->ident));
+        printf("%s, qui est un(e) %s a les relations:\n", s->x->nom, toStringEtype(s->x->ident));
         listeg parcours_relations = s->larcs;
         for (int j=0; j<longueur(s->larcs); j++) {
+			printf("j=%d\n", j);
             Arc a = (Arc) parcours_relations->val;
             afficheArc(a);
             parcours_relations = parcours_relations->suiv;
@@ -465,13 +472,34 @@ void affiche_degre_relations(Relations r, char *x) {
     
 }
 
+void affiche_int(void *x) {
+	int* affiche = (int*)x;
+	printf("%d", *affiche);
+}
 
-int main()
-{
-    
-    
+int main() {
+	/*listeg l = listegnouv();
+	int cinq = 5;
+	int dix = 10;
+	printf("estvide(l)=%d\n", estvide(l));
+	l = adjqueue(l, &cinq);
+	printf("estvide(l)=%d\n", estvide(l));
+	l = adjtete(l, &dix);
+	printf("longueur de l=%d\n", longueur(l));
+	affichelg(l, affiche_int);
+	l = suptete(l);
+	printf("estvide(l)=%d\n", estvide(l));
+	affichelg(l, affiche_int);
+	l = adjtete(l, &cinq);
+	l = det_null(l);
+	printf("estvide(l)=%d\n", estvide(l));
+	affichelg(l, affiche_int);*/
 
-
+	/*Relations r; relationInit(&r);
+	adjEntite(r, "KARL", PERSONNE);
+	adjEntite(r, "LUDOVIC", PERSONNE);
+	affiche_toutes_relations(r);*/
+	
 	int i,j;
 	Relations r; relationInit(&r);
 	// ajouter les entites de l'exemple
@@ -496,7 +524,7 @@ int main()
 
     affiche_toutes_relations(r);
     
-    /*
+    
 	// explorer les relations
 	printf("%s est en relation avec:\n", tabe[0]);
 	affichelg(en_relation(r, tabe[0]), afficheArc);
@@ -526,7 +554,7 @@ int main()
 		printf("\n");
 	}
 
-	affiche_degre_relations(r, tabe[3]);*/
+	affiche_degre_relations(r, tabe[3]);
 
 	relationFree(&r);
 
