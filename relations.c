@@ -284,6 +284,7 @@ void adjEntite(Relations g, char *nom, etype t) {
 // PRE CONDITION: strcmp(nom1,nom2)!=0
 void adjRelation(Relations g, char *nom1, char *nom2, rtype id) {
 	if (g == NULL) {return;}
+
     listeg l_nom1 = rech(g->l, nom1, compSommet);
 	listeg l_nom2 = rech(g->l, nom2, compSommet);
 	if (estvide(l_nom1) || estvide(l_nom2)) {
@@ -291,31 +292,33 @@ void adjRelation(Relations g, char *nom1, char *nom2, rtype id) {
 		l_nom2 = det_null(l_nom2);
 		return;
 	}
-	Sommet s_nom1 = (Sommet) l_nom1->val;
-	Sommet s_nom2 = (Sommet) l_nom2->val;
+	
+	Sommet som1 = (Sommet) l_nom1->val;
+	Sommet som2 = (Sommet) l_nom2->val;
 
 	l_nom1 = det_null(l_nom1);
 	l_nom2 = det_null(l_nom2);
 
-	etype type_nom1 = s_nom1->x->ident;
-	etype type_nom2 = s_nom2->x->ident;
 
-    listeg l_arc = rech(s_nom1->larcs, nom1, compArcRtype);
-    if (l_arc == NULL)
-        s_nom1->larcs = adjqueue(s_nom1->larcs, nouvArc(creerEntite(nom2, type_nom2), id));
+	etype type_nom1 = som1->x->ident;
+	etype type_nom2 = som2->x->ident;
+
+    listeg rech_arc = rech(som1->larcs, nom2, compArc);
+    if (rech_arc == NULL)
+        som1->larcs = adjqueue(som1->larcs, nouvArc(creerEntite(nom2, type_nom2), id));
     else {
-        Arc a = (Arc) l_arc->val;
+        Arc a = (Arc) rech_arc->val;
         a->t = id;
-		l_arc = det_null(l_arc);
+		rech_arc = det_null(rech_arc);
     }
 
-    l_arc = rech(s_nom2->larcs, nom2, compArcRtype);
-    if (l_arc == NULL)
-        s_nom2->larcs = adjqueue(s_nom2->larcs, nouvArc(creerEntite(nom1, type_nom1), id));
+    rech_arc = rech(som2->larcs, nom1, compArc);
+    if (rech_arc == NULL)
+        som2->larcs = adjqueue(som2->larcs, nouvArc(creerEntite(nom1, type_nom1), id));
     else {
-        Arc a = (Arc) l_arc->val;
+        Arc a = (Arc) rech_arc->val;
         a->t = id;
-		l_arc = det_null(l_arc);
+		rech_arc = det_null(rech_arc);
     }
 }
 
@@ -392,7 +395,45 @@ bool ont_lien_parente(Relations g, char *x, char *y) {
 // PRE CONDITION: les sommets correspondants à x et y sont de type PERSONNE
 // PRE CONDITION: strcmp(x,y)!=0
 bool se_connaissent(Relations g, char *x, char *y) {
-	return false;
+	if (g == NULL) {return false;}
+
+    listeg l_nomx = rech(g->l, x, compSommet);
+	if (estvide(l_nomx)) {
+		l_nomx = det_null(l_nomx);
+		return false;
+	}
+	
+	Sommet somx = (Sommet) l_nomx->val;
+
+	l_nomx = det_null(l_nomx);
+
+	listeg rech_arcy = rech(somx->larcs, y, compArc);
+    if (rech_arcy == NULL) {
+        listeg rel_comm = chemin2(g, x, y);
+		if (rel_comm == NULL)
+        	return false;
+		else {
+			listeg parcours = rel_comm;
+			for (int i=0; i<longueur(rel_comm); i++) {
+				Entite e = (Entite) parcours->val;
+				listeg zed = rech(somx->larcs, e->nom, compArc);
+				if (zed != NULL) {
+					Arc z = (Arc) zed->val;
+					zed = det_null(zed);
+					rel_comm = det_null(rel_comm);
+					return (est_lien_parente(z->t));
+				}
+				parcours = parcours->suiv;
+			}
+			rel_comm = det_null(rel_comm);
+			return false;
+		}
+    }
+    else {
+		Arc a = (Arc) rech_arcy->val;
+		rech_arcy = det_null(rech_arcy);
+		return (est_lien_connaissance(a->t) || est_lien_parente(a->t) || est_lien_professionel(a->t));
+    }
 }
 // PRE CONDITION: les sommets correspondants à x et y sont de type PERSONNE
 // PRE CONDITION: strcmp(x,y)!=0
@@ -411,13 +452,13 @@ bool se_connaissent_peutetre(Relations g, char *x, char *y) {
 char* toStringEtype(etype e) {
     switch (e) {
     case PERSONNE:
-        return "personne";
+        return "une personne";
     case OBJET:
-        return "objet";
+        return "un objet";
     case ADRESSE:
-        return "adresse";
+        return "une adresse";
     case VILLE:
-        return "ville";
+        return "une ville";
     }
     return "type d'entité non trouvé";
 }
@@ -449,14 +490,12 @@ void afficheArc(void *x) {
 
 void affiche_toutes_relations(Relations g) {
     if (g == NULL) {return;}
-    printf("%d\n", longueur(g->l)); //debug
     listeg parcours_entites = g->l;
     for (int i=0; i<longueur(g->l); i++) {
         Sommet s = (Sommet)parcours_entites->val;
-        printf("%s, qui est un(e) %s a les relations:\n", s->x->nom, toStringEtype(s->x->ident));
+        printf("%s, est %s qui a les relations:\n", s->x->nom, toStringEtype(s->x->ident));
         listeg parcours_relations = s->larcs;
         for (int j=0; j<longueur(s->larcs); j++) {
-			printf("j=%d\n", j);
             Arc a = (Arc) parcours_relations->val;
             afficheArc(a);
             parcours_relations = parcours_relations->suiv;
@@ -496,8 +535,11 @@ int main() {
 	affichelg(l, affiche_int);*/
 
 	/*Relations r; relationInit(&r);
+	
 	adjEntite(r, "KARL", PERSONNE);
 	adjEntite(r, "LUDOVIC", PERSONNE);
+
+	adjRelation(r, "KARL", "LUDOVIC", FRERE);
 	affiche_toutes_relations(r);*/
 	
 	int i,j;
